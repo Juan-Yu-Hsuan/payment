@@ -293,6 +293,103 @@
       color: #a0aec0;
       padding: 6px 0 4px;
     }
+
+    /* 確認彈窗樣式 */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+      animation: fadeIn 0.2s;
+    }
+
+    .modal-overlay.show { display: flex; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .modal {
+      background: white;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 340px;
+      overflow: hidden;
+      animation: slideUp 0.25s;
+    }
+
+    .modal-header {
+      padding: 24px 20px 12px;
+      text-align: center;
+    }
+
+    .modal-icon {
+      font-size: 48px;
+      margin-bottom: 8px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #2d3748;
+      margin-bottom: 6px;
+    }
+
+    .modal-amount {
+      font-size: 32px;
+      font-weight: 800;
+      color: #6c63ff;
+      margin: 8px 0;
+    }
+
+    .modal-message {
+      font-size: 14px;
+      color: #718096;
+      padding: 0 20px 20px;
+      text-align: center;
+    }
+
+    .modal-actions {
+      display: flex;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .modal-btn {
+      flex: 1;
+      padding: 16px;
+      background: white;
+      border: none;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .modal-btn.cancel {
+      color: #718096;
+      border-right: 1px solid #e2e8f0;
+    }
+
+    .modal-btn.confirm {
+      color: #6c63ff;
+    }
+
+    .modal-btn.confirm.danger {
+      color: #e53e3e;
+    }
+
+    .modal-btn:active {
+      background: #f7fafc;
+    }
   </style>
 </head>
 <body>
@@ -344,6 +441,22 @@
   <button class="export-btn" onclick="exportResult()">📋 複製結果</button>
 </div>
 
+<!-- 確認彈窗 -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-icon" id="modalIcon">💵</div>
+      <div class="modal-title" id="modalTitle">確認收款</div>
+      <div class="modal-amount" id="modalAmount"></div>
+    </div>
+    <div class="modal-message" id="modalMessage"></div>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeModal()">取消</button>
+      <button class="modal-btn confirm" id="modalConfirmBtn" onclick="confirmModal()">確認收款</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -354,6 +467,8 @@
     data = { people: [], weekStart: '', fee: 235 };
   }
   if (typeof data.fee !== 'number') data.fee = 235;
+
+  let pendingAction = null;
 
   function getWeekStart() {
     const d = new Date();
@@ -390,7 +505,7 @@
         <button class="delete-btn" onclick="deletePerson(${i})">✕</button>
         <span class="person-name">${escapeHtml(p.name)}</span>
         ${p.paid ? `<span class="paid-badge">$${data.fee} ✓</span>` : ''}
-        <button class="pay-btn" onclick="togglePaid(${i})">
+        <button class="pay-btn" onclick="askTogglePaid(${i})">
           ${p.paid ? '✓' : '$'}
         </button>
       </div>
@@ -429,12 +544,52 @@
     showToast(`✅ 已新增「${name}」`);
   }
 
-  function togglePaid(i) {
+  // 點擊「收款」按鈕時，先跳出確認彈窗
+  function askTogglePaid(i) {
+    const p = data.people[i];
+    const modal = document.getElementById('modal');
+    const icon = document.getElementById('modalIcon');
+    const title = document.getElementById('modalTitle');
+    const amount = document.getElementById('modalAmount');
+    const message = document.getElementById('modalMessage');
+    const confirmBtn = document.getElementById('modalConfirmBtn');
+
+    if (p.paid) {
+      // 已繳 → 要取消
+      icon.textContent = '↩️';
+      title.textContent = '取消繳費紀錄';
+      amount.textContent = p.name;
+      message.textContent = `確定要把「${p.name}」改回未繳狀態嗎？`;
+      confirmBtn.textContent = '確認取消';
+      confirmBtn.classList.add('danger');
+    } else {
+      // 未繳 → 要收款
+      icon.textContent = '💵';
+      title.textContent = '確認收款';
+      amount.textContent = `$${data.fee}`;
+      message.textContent = `確認向「${p.name}」收取 $${data.fee} 元？`;
+      confirmBtn.textContent = '確認收款';
+      confirmBtn.classList.remove('danger');
+    }
+
+    pendingAction = i;
+    modal.classList.add('show');
+  }
+
+  function closeModal() {
+    document.getElementById('modal').classList.remove('show');
+    pendingAction = null;
+  }
+
+  function confirmModal() {
+    if (pendingAction === null) return;
+    const i = pendingAction;
     data.people[i].paid = !data.people[i].paid;
     save();
     render();
     const p = data.people[i];
     showToast(p.paid ? `✅ ${p.name} 已繳 $${data.fee}` : `↩️ ${p.name} 取消繳費`);
+    closeModal();
   }
 
   function deletePerson(i) {
@@ -484,6 +639,11 @@
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 2000);
   }
+
+  // 點背景關閉彈窗
+  document.getElementById('modal').addEventListener('click', (e) => {
+    if (e.target.id === 'modal') closeModal();
+  });
 
   const feeInput = document.getElementById('feeInput');
   feeInput.value = data.fee;
