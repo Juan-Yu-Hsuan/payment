@@ -99,6 +99,31 @@
       padding-right: 4px;
     }
 
+    /* 分頁列 */
+    .tabs {
+      display: flex;
+      background: white;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 14px 10px;
+      border: none;
+      background: white;
+      font-size: 15px;
+      font-weight: 600;
+      color: #a0aec0;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .tab-btn.active {
+      color: #6c63ff;
+      border-bottom-color: #6c63ff;
+    }
+
     .summary {
       display: flex;
       gap: 10px;
@@ -155,12 +180,22 @@
       color: #38a169;
     }
 
+    .member-sub {
+      font-size: 13px;
+      color: #718096;
+      margin-top: 3px;
+    }
+
+    .member-sub b { color: #6c63ff; }
+
     .paid-badge {
       font-size: 12px;
       color: #38a169;
       margin-right: 10px;
       font-weight: 600;
     }
+
+    .paid-badge.credit { color: #6c63ff; }
 
     .pay-btn {
       width: 44px;
@@ -187,6 +222,21 @@
       background: #c6f6d5;
       color: #38a169;
     }
+
+    .topup-btn {
+      background: #6c63ff;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: transform 0.1s;
+    }
+
+    .topup-btn:active { transform: scale(0.94); }
 
     .delete-btn {
       background: none;
@@ -269,6 +319,13 @@
       font-size: 15px;
     }
 
+    .hint-text {
+      padding: 0 20px 20px;
+      color: #a0aec0;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
     .toast {
       position: fixed;
       bottom: 24px;
@@ -283,6 +340,7 @@
       transition: opacity 0.3s;
       pointer-events: none;
       white-space: nowrap;
+      z-index: 200;
     }
 
     .toast.show { opacity: 1; }
@@ -359,6 +417,39 @@
       text-align: center;
     }
 
+    .topup-field {
+      padding: 4px 20px 4px;
+    }
+
+    .topup-field input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      font-size: 22px;
+      font-weight: 700;
+      text-align: center;
+      outline: none;
+      color: #2d3748;
+      -moz-appearance: textfield;
+    }
+
+    .topup-field input::-webkit-outer-spin-button,
+    .topup-field input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .topup-field input:focus { border-color: #6c63ff; }
+
+    .topup-convert {
+      text-align: center;
+      font-size: 14px;
+      color: #6c63ff;
+      font-weight: 600;
+      padding: 10px 20px 18px;
+    }
+
     .modal-actions {
       display: flex;
       border-top: 1px solid #e2e8f0;
@@ -401,47 +492,74 @@
   <div class="date" id="dateLabel"></div>
 
   <div class="fee-display">
-    <div class="fee-label">此次繳納金額</div>
+    <div class="fee-label">每場繳納金額</div>
     <div class="fee-input-wrap">
       <span class="currency">$</span>
       <input type="number" id="feeInput" min="0" step="1" inputmode="numeric">
     </div>
   </div>
-  <div class="edit-hint">👆 點數字可修改</div>
+  <div class="edit-hint">👆 點數字可修改（也是儲值換算場數的單價）</div>
 </header>
 
-<div class="summary">
-  <div class="stat">
-    <div class="num" id="paidCount">0</div>
-    <div class="label">已繳人數</div>
+<div class="tabs">
+  <button class="tab-btn active" id="tabBtnPay" onclick="switchTab('pay')">💰 繳費</button>
+  <button class="tab-btn" id="tabBtnMembers" onclick="switchTab('members')">💳 儲值會員</button>
+</div>
+
+<!-- ===== 繳費分頁 ===== -->
+<div id="tab-pay">
+  <div class="summary">
+    <div class="stat">
+      <div class="num" id="paidCount">0</div>
+      <div class="label">已繳人數</div>
+    </div>
+    <div class="stat">
+      <div class="num" id="unpaidCount">0</div>
+      <div class="label">未繳人數</div>
+    </div>
+    <div class="stat total">
+      <div class="num" id="totalAmount">$0</div>
+      <div class="label">現金已收</div>
+    </div>
   </div>
-  <div class="stat">
-    <div class="num" id="unpaidCount">0</div>
-    <div class="label">未繳人數</div>
+
+  <div class="week-label" id="weekLabel"></div>
+
+  <div class="list" id="list"></div>
+
+  <div class="add-area">
+    <div class="add-row">
+      <input type="text" id="nameInput" placeholder="輸入姓名" maxlength="20">
+      <button onclick="addPerson()">新增</button>
+    </div>
   </div>
-  <div class="stat total">
-    <div class="num" id="totalAmount">$0</div>
-    <div class="label">已收金額</div>
+
+  <div class="actions">
+    <button class="reset-btn" onclick="resetWeek()">🔄 新的一週（清除繳費）</button>
+    <button class="export-btn" onclick="exportResult()">📋 複製結果</button>
   </div>
 </div>
 
-<div class="week-label" id="weekLabel"></div>
+<!-- ===== 儲值會員分頁 ===== -->
+<div id="tab-members" style="display:none">
+  <div class="week-label" id="memberSummary" style="padding-top:14px"></div>
 
-<div class="list" id="list"></div>
+  <div class="list" id="memberList"></div>
 
-<div class="add-area">
-  <div class="add-row">
-    <input type="text" id="nameInput" placeholder="輸入姓名" maxlength="20">
-    <button onclick="addPerson()">新增</button>
+  <div class="add-area">
+    <div class="add-row">
+      <input type="text" id="memberNameInput" placeholder="新增儲值會員姓名" maxlength="20">
+      <button onclick="addMember()">新增</button>
+    </div>
+  </div>
+
+  <div class="hint-text">
+    💡 會員名字要跟「繳費」分頁的名字<b>完全一樣</b>，付款時才會自動用儲值扣 1 場。<br>
+    💡 儲值時輸入金額，系統會用上方「每場 $<span id="hintFee">0</span>」自動換算成場數。
   </div>
 </div>
 
-<div class="actions">
-  <button class="reset-btn" onclick="resetWeek()">🔄 新的一週（清除繳費）</button>
-  <button class="export-btn" onclick="exportResult()">📋 複製結果</button>
-</div>
-
-<!-- 確認彈窗 -->
+<!-- 確認彈窗（收款 / 取消 / 儲值扣款） -->
 <div class="modal-overlay" id="modal">
   <div class="modal">
     <div class="modal-header">
@@ -457,18 +575,50 @@
   </div>
 </div>
 
+<!-- 儲值彈窗 -->
+<div class="modal-overlay" id="topupModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-icon">💳</div>
+      <div class="modal-title">儲值 <span id="topupName"></span></div>
+    </div>
+    <div class="topup-field">
+      <input type="number" id="topupAmount" min="0" step="1" inputmode="numeric" placeholder="輸入儲值金額" oninput="updateTopupConvert()">
+    </div>
+    <div class="topup-convert" id="topupConvert"></div>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeTopup()">取消</button>
+      <button class="modal-btn confirm" onclick="confirmTopup()">確認儲值</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
   let data;
   try {
-    data = JSON.parse(localStorage.getItem('paymentData') || '{"people":[],"weekStart":"","fee":235}');
+    data = JSON.parse(localStorage.getItem('paymentData') || '{"people":[],"members":[],"weekStart":"","fee":235}');
   } catch (e) {
-    data = { people: [], weekStart: '', fee: 235 };
+    data = { people: [], members: [], weekStart: '', fee: 235 };
   }
   if (typeof data.fee !== 'number') data.fee = 235;
+  if (!Array.isArray(data.people)) data.people = [];
+  if (!Array.isArray(data.members)) data.members = [];
+  // 舊資料補上付款方式
+  data.people.forEach(p => { if (p.paid && !p.method) p.method = 'cash'; });
 
-  let pendingAction = null;
+  let pending = null;     // { i, useCredit }
+  let topupIndex = null;
+
+  function fmtCredits(c) {
+    c = Math.round((c || 0) * 10) / 10;
+    return Number.isInteger(c) ? String(c) : c.toFixed(1);
+  }
+
+  function findMember(name) {
+    return data.members.find(m => m.name === name);
+  }
 
   function getWeekStart() {
     const d = new Date();
@@ -486,34 +636,80 @@
     }
   }
 
+  function switchTab(t) {
+    document.getElementById('tab-pay').style.display = t === 'pay' ? '' : 'none';
+    document.getElementById('tab-members').style.display = t === 'members' ? '' : 'none';
+    document.getElementById('tabBtnPay').classList.toggle('active', t === 'pay');
+    document.getElementById('tabBtnMembers').classList.toggle('active', t === 'members');
+    if (t === 'members') renderMembers();
+    if (t === 'pay') render();
+  }
+
   function render() {
     const list = document.getElementById('list');
     const paid = data.people.filter(p => p.paid);
     const unpaid = data.people.filter(p => !p.paid);
+    const cashPaid = paid.filter(p => p.method !== 'credit');
 
     document.getElementById('paidCount').textContent = paid.length;
     document.getElementById('unpaidCount').textContent = unpaid.length;
-    document.getElementById('totalAmount').textContent = '$' + (paid.length * data.fee).toLocaleString();
+    document.getElementById('totalAmount').textContent = '$' + (cashPaid.length * data.fee).toLocaleString();
 
     if (data.people.length === 0) {
       list.innerHTML = '<div class="empty">還沒有人喔，先新增名單吧！</div>';
       return;
     }
 
-    list.innerHTML = data.people.map((p, i) => `
-      <div class="person ${p.paid ? 'paid' : ''}" id="person-${i}">
+    list.innerHTML = data.people.map((p, i) => {
+      const m = findMember(p.name);
+      let badge = '';
+      if (p.paid) {
+        badge = p.method === 'credit'
+          ? `<span class="paid-badge credit">💳 儲值 ✓</span>`
+          : `<span class="paid-badge">$${data.fee} ✓</span>`;
+      }
+      const memberTag = (m && !p.paid)
+        ? ` <span style="font-size:11px;color:#6c63ff;font-weight:600">💳${fmtCredits(m.credits)}場</span>`
+        : '';
+      return `
+      <div class="person ${p.paid ? 'paid' : ''}">
         <button class="delete-btn" onclick="deletePerson(${i})">✕</button>
-        <span class="person-name">${escapeHtml(p.name)}</span>
-        ${p.paid ? `<span class="paid-badge">$${data.fee} ✓</span>` : ''}
+        <span class="person-name">${escapeHtml(p.name)}${memberTag}</span>
+        ${badge}
         <button class="pay-btn" onclick="askTogglePaid(${i})">
           ${p.paid ? '✓' : '$'}
         </button>
+      </div>`;
+    }).join('');
+  }
+
+  function renderMembers() {
+    const wrap = document.getElementById('memberList');
+    document.getElementById('hintFee').textContent = data.fee;
+
+    const totalSessions = data.members.reduce((s, m) => s + (m.credits || 0), 0);
+    document.getElementById('memberSummary').textContent =
+      `儲值會員 ${data.members.length} 人 · 剩餘共 ${fmtCredits(totalSessions)} 場`;
+
+    if (data.members.length === 0) {
+      wrap.innerHTML = '<div class="empty">還沒有儲值會員，先新增吧！</div>';
+      return;
+    }
+
+    wrap.innerHTML = data.members.map((m, i) => `
+      <div class="person">
+        <button class="delete-btn" onclick="deleteMember(${i})">✕</button>
+        <div style="flex:1">
+          <div class="person-name">${escapeHtml(m.name)}</div>
+          <div class="member-sub">剩 <b>${fmtCredits(m.credits)}</b> 場 · ≈ $${Math.round((m.credits || 0) * data.fee).toLocaleString()}</div>
+        </div>
+        <button class="topup-btn" onclick="askTopup(${i})">＋ 儲值</button>
       </div>
     `).join('');
   }
 
   function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
   function updateLabels() {
@@ -528,15 +724,9 @@
   function addPerson() {
     const input = document.getElementById('nameInput');
     const name = input.value.trim();
-    if (!name) {
-      showToast('請輸入姓名');
-      return;
-    }
-    if (data.people.find(p => p.name === name)) {
-      showToast('這個名字已經在了！');
-      return;
-    }
-    data.people.push({ name, paid: false });
+    if (!name) { showToast('請輸入姓名'); return; }
+    if (data.people.find(p => p.name === name)) { showToast('這個名字已經在了！'); return; }
+    data.people.push({ name, paid: false, method: null });
     if (!data.weekStart) data.weekStart = getWeekStart();
     input.value = '';
     save();
@@ -544,7 +734,7 @@
     showToast(`✅ 已新增「${name}」`);
   }
 
-  // 點擊「收款」按鈕時，先跳出確認彈窗
+  // 點「收款」按鈕：判斷是現金還是儲值扣款，跳對應彈窗
   function askTogglePaid(i) {
     const p = data.people[i];
     const modal = document.getElementById('modal');
@@ -553,42 +743,84 @@
     const amount = document.getElementById('modalAmount');
     const message = document.getElementById('modalMessage');
     const confirmBtn = document.getElementById('modalConfirmBtn');
+    confirmBtn.classList.remove('danger');
 
-    if (p.paid) {
-      // 已繳 → 要取消
+    if (!p.paid) {
+      const m = findMember(p.name);
+      if (m && m.credits >= 1) {
+        // 有儲值 → 扣場數
+        icon.textContent = '💳';
+        title.textContent = '用儲值扣款';
+        amount.textContent = p.name;
+        message.textContent = `「${p.name}」目前有 ${fmtCredits(m.credits)} 場，扣 1 場後剩 ${fmtCredits(m.credits - 1)} 場。確認扣款？`;
+        confirmBtn.textContent = '扣 1 場';
+        pending = { i, useCredit: true };
+      } else {
+        // 沒儲值（或場數不足）→ 收現金
+        icon.textContent = '💵';
+        title.textContent = '確認收款';
+        amount.textContent = `$${data.fee}`;
+        const low = (m && m.credits < 1) ? '（儲值場數不足，改收現金）' : '';
+        message.textContent = `確認向「${p.name}」收取 $${data.fee} 元？${low}`;
+        confirmBtn.textContent = '確認收款';
+        pending = { i, useCredit: false };
+      }
+    } else {
+      // 已繳 → 取消
       icon.textContent = '↩️';
       title.textContent = '取消繳費紀錄';
       amount.textContent = p.name;
-      message.textContent = `確定要把「${p.name}」改回未繳狀態嗎？`;
+      message.textContent = p.method === 'credit'
+        ? `確定取消？會退回 1 場給「${p.name}」的儲值。`
+        : `確定要把「${p.name}」改回未繳狀態嗎？`;
       confirmBtn.textContent = '確認取消';
       confirmBtn.classList.add('danger');
-    } else {
-      // 未繳 → 要收款
-      icon.textContent = '💵';
-      title.textContent = '確認收款';
-      amount.textContent = `$${data.fee}`;
-      message.textContent = `確認向「${p.name}」收取 $${data.fee} 元？`;
-      confirmBtn.textContent = '確認收款';
-      confirmBtn.classList.remove('danger');
+      pending = { i, useCredit: false };
     }
 
-    pendingAction = i;
     modal.classList.add('show');
   }
 
   function closeModal() {
     document.getElementById('modal').classList.remove('show');
-    pendingAction = null;
+    pending = null;
   }
 
   function confirmModal() {
-    if (pendingAction === null) return;
-    const i = pendingAction;
-    data.people[i].paid = !data.people[i].paid;
+    if (!pending) return;
+    const i = pending.i;
+    const p = data.people[i];
+
+    if (!p.paid) {
+      // 繳費
+      if (pending.useCredit) {
+        const m = findMember(p.name);
+        if (!m || m.credits < 1) {
+          showToast('⚠️ 儲值場數不足');
+          closeModal(); render(); return;
+        }
+        m.credits = Math.round((m.credits - 1) * 10) / 10;
+        p.paid = true; p.method = 'credit';
+        showToast(`💳 ${p.name} 扣 1 場（剩 ${fmtCredits(m.credits)} 場）`);
+      } else {
+        p.paid = true; p.method = 'cash';
+        showToast(`✅ ${p.name} 已繳 $${data.fee}`);
+      }
+    } else {
+      // 取消繳費
+      if (p.method === 'credit') {
+        const m = findMember(p.name);
+        if (m) m.credits = Math.round((m.credits + 1) * 10) / 10;
+        showToast(`↩️ ${p.name} 退回 1 場`);
+      } else {
+        showToast(`↩️ ${p.name} 取消繳費`);
+      }
+      p.paid = false; p.method = null;
+    }
+
     save();
     render();
-    const p = data.people[i];
-    showToast(p.paid ? `✅ ${p.name} 已繳 $${data.fee}` : `↩️ ${p.name} 取消繳費`);
+    renderMembers();
     closeModal();
   }
 
@@ -601,8 +833,8 @@
   }
 
   function resetWeek() {
-    if (!confirm('新的一週開始！清除所有人的繳費記錄（名單保留）？')) return;
-    data.people.forEach(p => p.paid = false);
+    if (!confirm('新的一週開始！清除所有人的繳費記錄（名單保留、儲值餘額不受影響）？')) return;
+    data.people.forEach(p => { p.paid = false; p.method = null; });
     data.weekStart = getWeekStart();
     save();
     render();
@@ -611,16 +843,19 @@
   }
 
   function exportResult() {
-    const paid = data.people.filter(p => p.paid).map(p => p.name);
+    const cash = data.people.filter(p => p.paid && p.method !== 'credit').map(p => p.name);
+    const credit = data.people.filter(p => p.paid && p.method === 'credit').map(p => p.name);
     const unpaid = data.people.filter(p => !p.paid).map(p => p.name);
     const now = new Date().toLocaleDateString('zh-TW');
-    let text = `📅 ${now} 繳費紀錄（每人 $${data.fee}）\n`;
+    let text = `📅 ${now} 繳費紀錄（每場 $${data.fee}）\n`;
     text += `━━━━━━━━━━━━━\n`;
-    text += `✅ 已繳（${paid.length} 人）：\n`;
-    text += paid.length ? paid.join('、') + '\n' : '（無）\n';
+    text += `✅ 現金已繳（${cash.length} 人）：\n`;
+    text += cash.length ? cash.join('、') + '\n' : '（無）\n';
+    text += `\n💳 儲值扣抵（${credit.length} 人）：\n`;
+    text += credit.length ? credit.join('、') + '\n' : '（無）\n';
     text += `\n❌ 未繳（${unpaid.length} 人）：\n`;
     text += unpaid.length ? unpaid.join('、') + '\n' : '（無）\n';
-    text += `\n💰 已收：$${(paid.length * data.fee).toLocaleString()}`;
+    text += `\n💰 現金已收：$${(cash.length * data.fee).toLocaleString()}`;
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(() => {
@@ -631,6 +866,70 @@
     } else {
       prompt('複製以下內容：', text);
     }
+  }
+
+  // ===== 儲值會員 =====
+  function addMember() {
+    const input = document.getElementById('memberNameInput');
+    const name = input.value.trim();
+    if (!name) { showToast('請輸入姓名'); return; }
+    if (findMember(name)) { showToast('這位會員已存在！'); return; }
+    data.members.push({ name, credits: 0 });
+    input.value = '';
+    save();
+    renderMembers();
+    render();
+    showToast(`✅ 已新增會員「${name}」，記得儲值`);
+  }
+
+  function deleteMember(i) {
+    const m = data.members[i];
+    if (!confirm(`確定刪除會員「${m.name}」？剩餘 ${fmtCredits(m.credits)} 場也會一起刪除。`)) return;
+    data.members.splice(i, 1);
+    save();
+    renderMembers();
+    render();
+  }
+
+  function askTopup(i) {
+    topupIndex = i;
+    const m = data.members[i];
+    document.getElementById('topupName').textContent = m.name;
+    const amt = document.getElementById('topupAmount');
+    amt.value = '';
+    document.getElementById('topupConvert').textContent = `每場 $${data.fee}，輸入金額自動換算場數`;
+    document.getElementById('topupModal').classList.add('show');
+    setTimeout(() => amt.focus(), 100);
+  }
+
+  function updateTopupConvert() {
+    const amt = parseFloat(document.getElementById('topupAmount').value) || 0;
+    const el = document.getElementById('topupConvert');
+    if (amt > 0 && data.fee > 0) {
+      el.textContent = `$${amt.toLocaleString()} ＝ ${fmtCredits(amt / data.fee)} 場`;
+    } else {
+      el.textContent = `每場 $${data.fee}，輸入金額自動換算場數`;
+    }
+  }
+
+  function confirmTopup() {
+    if (topupIndex === null) return;
+    const amt = parseFloat(document.getElementById('topupAmount').value) || 0;
+    if (amt <= 0) { showToast('請輸入儲值金額'); return; }
+    if (data.fee <= 0) { showToast('請先設定每場金額'); return; }
+    const sessions = amt / data.fee;
+    const m = data.members[topupIndex];
+    m.credits = Math.round(((m.credits || 0) + sessions) * 10) / 10;
+    save();
+    renderMembers();
+    render();
+    showToast(`💳 ${m.name} 儲值 $${amt.toLocaleString()}（+${fmtCredits(sessions)} 場，共 ${fmtCredits(m.credits)} 場）`);
+    closeTopup();
+  }
+
+  function closeTopup() {
+    document.getElementById('topupModal').classList.remove('show');
+    topupIndex = null;
   }
 
   function showToast(msg) {
@@ -644,6 +943,9 @@
   document.getElementById('modal').addEventListener('click', (e) => {
     if (e.target.id === 'modal') closeModal();
   });
+  document.getElementById('topupModal').addEventListener('click', (e) => {
+    if (e.target.id === 'topupModal') closeTopup();
+  });
 
   const feeInput = document.getElementById('feeInput');
   feeInput.value = data.fee;
@@ -653,6 +955,7 @@
       data.fee = v;
       save();
       render();
+      renderMembers();
     }
   });
   feeInput.addEventListener('blur', () => {
@@ -663,6 +966,9 @@
 
   document.getElementById('nameInput').addEventListener('keypress', e => {
     if (e.key === 'Enter') addPerson();
+  });
+  document.getElementById('memberNameInput').addEventListener('keypress', e => {
+    if (e.key === 'Enter') addMember();
   });
 
   updateLabels();
