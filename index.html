@@ -524,6 +524,36 @@
       border-color: #e2e8f0;
       color: #a0aec0;
     }
+
+    /* 會員紀錄 */
+    .log-btn {
+      background: #f8f7ff;
+      border: 1px solid #e9d8fd;
+      color: #6c63ff;
+      border-radius: 12px;
+      padding: 9px 12px;
+      font-size: 16px;
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-right: 6px;
+    }
+    .log-btn:active { background: #ede9fe; }
+    .member-log {
+      width: 100%;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed #e2e8f0;
+    }
+    .log-row {
+      display: flex;
+      gap: 10px;
+      font-size: 13px;
+      padding: 4px 0;
+      border-bottom: 1px solid #f7fafc;
+    }
+    .log-row:last-child { border-bottom: none; }
+    .log-date { color: #a0aec0; flex-shrink: 0; width: 118px; }
+    .log-empty { color: #a0aec0; font-size: 13px; text-align: center; padding: 8px 0; }
   </style>
 </head>
 <body>
@@ -650,8 +680,9 @@
   if (typeof data.fee !== 'number') data.fee = 235;
   if (!Array.isArray(data.people)) data.people = [];
   if (!Array.isArray(data.members)) data.members = [];
-  // 舊資料補上付款方式
+  // 舊資料補上付款方式 / 會員明細欄位
   data.people.forEach(p => { if (p.paid && !p.method) p.method = 'cash'; });
+  data.members.forEach(m => { if (!Array.isArray(m.log)) m.log = []; });
 
   let pending = null;     // { i, useCredit }
   let topupIndex = null;
@@ -663,6 +694,18 @@
 
   function findMember(name) {
     return data.members.find(m => m.name === name);
+  }
+
+  function fmtLogDate(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function toggleMemberLog(i) {
+    const el = document.getElementById('mlog-' + i);
+    if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
   }
 
   function getWeekStart() {
@@ -770,16 +813,28 @@
       return;
     }
 
-    wrap.innerHTML = data.members.map((m, i) => `
-      <div class="person">
+    wrap.innerHTML = data.members.map((m, i) => {
+      const log = (m.log || []).slice().reverse();
+      const logHtml = log.length ? log.map(e => {
+        let txt, color;
+        if (e.t === 'deduct') { txt = '打球扣 1 場'; color = '#e53e3e'; }
+        else if (e.t === 'topup') { txt = `儲值 $${(e.amt || 0).toLocaleString()}（+${fmtCredits(e.s)} 場）`; color = '#38a169'; }
+        else if (e.t === 'refund') { txt = '退回 1 場'; color = '#718096'; }
+        else { txt = ''; color = '#718096'; }
+        return `<div class="log-row"><span class="log-date">${fmtLogDate(e.d)}</span><span style="color:${color}">${txt}</span></div>`;
+      }).join('') : '<div class="log-empty">尚無紀錄</div>';
+      return `
+      <div class="person" style="flex-wrap:wrap">
         <button class="delete-btn" onclick="deleteMember(${i})">✕</button>
-        <div style="flex:1">
+        <div style="flex:1;min-width:0">
           <div class="person-name">${escapeHtml(m.name)}</div>
           <div class="member-sub">剩 <b>${fmtCredits(m.credits)}</b> 場 · ≈ $${Math.round((m.credits || 0) * data.fee).toLocaleString()}</div>
         </div>
+        <button class="log-btn" onclick="toggleMemberLog(${i})" title="儲值/扣場紀錄">📜</button>
         <button class="topup-btn" onclick="askTopup(${i})">＋ 儲值</button>
-      </div>
-    `).join('');
+        <div class="member-log" id="mlog-${i}" style="display:none">${logHtml}</div>
+      </div>`;
+    }).join('');
   }
 
   function escapeHtml(s) {
@@ -822,7 +877,6 @@
     if (!p.paid) {
       const m = findMember(p.name);
       if (m && m.credits >= 1) {
-        // 有儲值 → 扣場數
         icon.textContent = '💳';
         title.textContent = '用儲值扣款';
         amount.textContent = p.name;
@@ -830,7 +884,6 @@
         confirmBtn.textContent = '扣 1 場';
         pending = { i, useCredit: true };
       } else {
-        // 沒儲值（或場數不足）→ 收現金
         icon.textContent = '💵';
         title.textContent = '確認收款';
         amount.textContent = `$${data.fee}`;
@@ -840,7 +893,6 @@
         pending = { i, useCredit: false };
       }
     } else {
-      // 已繳 → 取消
       icon.textContent = '↩️';
       title.textContent = '取消繳費紀錄';
       amount.textContent = p.name;
@@ -866,7 +918,6 @@
     const p = data.people[i];
 
     if (!p.paid) {
-      // 繳費
       if (pending.useCredit) {
         const m = findMember(p.name);
         if (!m || m.credits < 1) {
@@ -874,6 +925,8 @@
           closeModal(); render(); return;
         }
         m.credits = Math.round((m.credits - 1) * 10) / 10;
+        if (!Array.isArray(m.log)) m.log = [];
+        m.log.push({ t: 'deduct', d: new Date().toISOString(), s: -1 });
         p.paid = true; p.method = 'credit';
         if (m.credits <= 1) {
           showToast(`⚠️ ${p.name} 只剩 ${fmtCredits(m.credits)} 場，記得提醒儲值！`);
@@ -885,10 +938,13 @@
         showToast(`✅ ${p.name} 已繳 $${data.fee}`);
       }
     } else {
-      // 取消繳費
       if (p.method === 'credit') {
         const m = findMember(p.name);
-        if (m) m.credits = Math.round((m.credits + 1) * 10) / 10;
+        if (m) {
+          m.credits = Math.round((m.credits + 1) * 10) / 10;
+          if (!Array.isArray(m.log)) m.log = [];
+          m.log.push({ t: 'refund', d: new Date().toISOString(), s: 1 });
+        }
         showToast(`↩️ ${p.name} 退回 1 場`);
       } else {
         showToast(`↩️ ${p.name} 取消繳費`);
@@ -952,7 +1008,7 @@
     const name = input.value.trim();
     if (!name) { showToast('請輸入姓名'); return; }
     if (findMember(name)) { showToast('這位會員已存在！'); return; }
-    data.members.push({ name, credits: 0 });
+    data.members.push({ name, credits: 0, log: [] });
     input.value = '';
     save();
     renderMembers();
@@ -998,6 +1054,8 @@
     const sessions = amt / data.fee;
     const m = data.members[topupIndex];
     m.credits = Math.round(((m.credits || 0) + sessions) * 10) / 10;
+    if (!Array.isArray(m.log)) m.log = [];
+    m.log.push({ t: 'topup', d: new Date().toISOString(), s: Math.round(sessions * 10) / 10, amt: amt });
     save();
     renderMembers();
     render();
@@ -1017,7 +1075,6 @@
     setTimeout(() => t.classList.remove('show'), 2000);
   }
 
-  // 點背景關閉彈窗
   document.getElementById('modal').addEventListener('click', (e) => {
     if (e.target.id === 'modal') closeModal();
   });
