@@ -481,6 +481,49 @@
     .modal-btn:active {
       background: #f7fafc;
     }
+
+    /* 儲值餘額提醒卡 */
+    .credit-card {
+      margin: 10px 16px 0;
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      padding: 12px 14px;
+    }
+    .credit-card h3 {
+      font-size: 13px;
+      color: #718096;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .credit-chip {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+      background: #f8f7ff;
+      border: 1px solid #e9d8fd;
+      color: #5a52d5;
+      border-radius: 999px;
+      padding: 5px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      margin: 3px 5px 3px 0;
+    }
+    .credit-chip .n { font-weight: 800; font-size: 15px; }
+    .credit-chip.low {
+      background: #fff5f5;
+      border-color: #feb2b2;
+      color: #e53e3e;
+    }
+    .credit-chip.empty {
+      background: #f7fafc;
+      border-color: #e2e8f0;
+      color: #a0aec0;
+    }
   </style>
 </head>
 <body>
@@ -524,6 +567,8 @@
   </div>
 
   <div class="week-label" id="weekLabel"></div>
+
+  <div id="creditReminder"></div>
 
   <div class="list" id="list"></div>
 
@@ -655,6 +700,8 @@
     document.getElementById('unpaidCount').textContent = unpaid.length;
     document.getElementById('totalAmount').textContent = '$' + (cashPaid.length * data.fee).toLocaleString();
 
+    renderCreditReminder();
+
     if (data.people.length === 0) {
       list.innerHTML = '<div class="empty">還沒有人喔，先新增名單吧！</div>';
       return;
@@ -681,6 +728,33 @@
         </button>
       </div>`;
     }).join('');
+  }
+
+  function renderCreditReminder() {
+    const box = document.getElementById('creditReminder');
+    if (!box) return;
+    if (!data.members.length) { box.innerHTML = ''; return; }
+
+    const sorted = data.members.slice().sort((a, b) => (a.credits || 0) - (b.credits || 0));
+    const chips = sorted.map(m => {
+      const c = m.credits || 0;
+      let cls = '', tag = '';
+      if (c <= 0) { cls = 'empty'; tag = ' · 已用完'; }
+      else if (c <= 1) { cls = 'low'; tag = ' · ⚠ 最後 1 場'; }
+      return `<span class="credit-chip ${cls}">${escapeHtml(m.name)} <span class="n">${fmtCredits(c)}</span>場${tag}</span>`;
+    }).join('');
+
+    const lowCount = data.members.filter(m => (m.credits || 0) > 0 && (m.credits || 0) <= 1).length;
+    const emptyCount = data.members.filter(m => (m.credits || 0) <= 0).length;
+    let warn = '';
+    if (lowCount) warn += ` · <span style="color:#e53e3e">${lowCount} 人剩最後 1 場</span>`;
+    if (emptyCount) warn += ` · <span style="color:#a0aec0">${emptyCount} 人已用完</span>`;
+
+    box.innerHTML = `
+      <div class="credit-card">
+        <h3>💳 儲值餘額${warn}</h3>
+        <div>${chips}</div>
+      </div>`;
   }
 
   function renderMembers() {
@@ -801,7 +875,11 @@
         }
         m.credits = Math.round((m.credits - 1) * 10) / 10;
         p.paid = true; p.method = 'credit';
-        showToast(`💳 ${p.name} 扣 1 場（剩 ${fmtCredits(m.credits)} 場）`);
+        if (m.credits <= 1) {
+          showToast(`⚠️ ${p.name} 只剩 ${fmtCredits(m.credits)} 場，記得提醒儲值！`);
+        } else {
+          showToast(`💳 ${p.name} 扣 1 場（剩 ${fmtCredits(m.credits)} 場）`);
+        }
       } else {
         p.paid = true; p.method = 'cash';
         showToast(`✅ ${p.name} 已繳 $${data.fee}`);
