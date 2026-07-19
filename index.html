@@ -554,6 +554,51 @@
     .log-row:last-child { border-bottom: none; }
     .log-date { color: #a0aec0; flex-shrink: 0; width: 118px; }
     .log-empty { color: #a0aec0; font-size: 13px; text-align: center; padding: 8px 0; }
+
+    /* 歷史紀錄卡片 */
+    .hist-card {
+      background: white;
+      border-radius: 14px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      border-left: 4px solid #38a169;
+      overflow: hidden;
+    }
+    .hist-card.has-unpaid {
+      background: #fff5f5;
+      border-left-color: #e53e3e;
+    }
+    .hist-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 14px 16px;
+      cursor: pointer;
+    }
+    .hist-date { font-size: 16px; font-weight: 700; color: #2d3748; }
+    .hist-sum { font-size: 12px; color: #718096; margin-top: 4px; }
+    .hist-unpaid {
+      font-size: 13px;
+      color: #e53e3e;
+      font-weight: 700;
+      margin-top: 6px;
+      background: #fee2e2;
+      border-radius: 8px;
+      padding: 5px 10px;
+      display: inline-block;
+    }
+    .hist-detail {
+      padding: 4px 16px 12px;
+      border-top: 1px dashed #e2e8f0;
+    }
+    .hist-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      padding: 7px 2px;
+      border-bottom: 1px solid #f7fafc;
+    }
+    .hist-row:last-child { border-bottom: none; }
   </style>
 </head>
 <body>
@@ -577,6 +622,7 @@
 <div class="tabs">
   <button class="tab-btn active" id="tabBtnPay" onclick="switchTab('pay')">💰 繳費</button>
   <button class="tab-btn" id="tabBtnMembers" onclick="switchTab('members')">💳 儲值會員</button>
+  <button class="tab-btn" id="tabBtnHistory" onclick="switchTab('history')">📅 歷史紀錄</button>
 </div>
 
 <!-- ===== 繳費分頁 ===== -->
@@ -610,7 +656,7 @@
   </div>
 
   <div class="actions">
-    <button class="reset-btn" onclick="resetWeek()">🔄 新的一週（清除繳費）</button>
+    <button class="reset-btn" onclick="resetWeek()">🔄 結算並開新的一週</button>
     <button class="export-btn" onclick="exportResult()">📋 複製結果</button>
   </div>
 </div>
@@ -632,6 +678,11 @@
     💡 會員名字要跟「繳費」分頁的名字<b>完全一樣</b>，付款時才會自動用儲值扣 1 場。<br>
     💡 儲值時輸入金額，系統會用上方「每場 $<span id="hintFee">0</span>」自動換算成場數。
   </div>
+</div>
+
+<!-- ===== 歷史紀錄分頁 ===== -->
+<div id="tab-history" style="display:none">
+  <div class="list" id="historyList" style="padding-top:14px"></div>
 </div>
 
 <!-- 確認彈窗（收款 / 取消 / 儲值扣款） -->
@@ -680,6 +731,7 @@
   if (typeof data.fee !== 'number') data.fee = 235;
   if (!Array.isArray(data.people)) data.people = [];
   if (!Array.isArray(data.members)) data.members = [];
+  if (!Array.isArray(data.history)) data.history = [];
   // 舊資料補上付款方式 / 會員明細欄位
   data.people.forEach(p => { if (p.paid && !p.method) p.method = 'cash'; });
   data.members.forEach(m => { if (!Array.isArray(m.log)) m.log = []; });
@@ -729,8 +781,11 @@
     document.getElementById('tab-members').style.display = t === 'members' ? '' : 'none';
     document.getElementById('tabBtnPay').classList.toggle('active', t === 'pay');
     document.getElementById('tabBtnMembers').classList.toggle('active', t === 'members');
+    document.getElementById('tab-history').style.display = t === 'history' ? '' : 'none';
+    document.getElementById('tabBtnHistory').classList.toggle('active', t === 'history');
     if (t === 'members') renderMembers();
     if (t === 'pay') render();
+    if (t === 'history') renderHistory();
   }
 
   function render() {
@@ -771,6 +826,66 @@
         </button>
       </div>`;
     }).join('');
+  }
+
+  function fmtHistDate(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}（${wd}）`;
+  }
+
+  function toggleHist(idx) {
+    const el = document.getElementById('hist-' + idx);
+    if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+  }
+
+  function deleteHist(idx) {
+    const h = data.history[idx];
+    if (!h) return;
+    if (!confirm(`刪除 ${fmtHistDate(h.savedAt)} 的紀錄？`)) return;
+    data.history.splice(idx, 1);
+    save();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const wrap = document.getElementById('historyList');
+    if (!wrap) return;
+    if (!data.history || !data.history.length) {
+      wrap.innerHTML = '<div class="empty">還沒有歷史紀錄。<br>在「繳費」分頁按「🔄 結算並開新的一週」就會存一筆。</div>';
+      return;
+    }
+    let html = '';
+    for (let idx = data.history.length - 1; idx >= 0; idx--) {
+      const h = data.history[idx];
+      const people = h.people || [];
+      const cashN = people.filter(p => p.paid && p.method !== 'credit').length;
+      const creditN = people.filter(p => p.paid && p.method === 'credit').length;
+      const unpaid = people.filter(p => !p.paid);
+      const hasUnpaid = unpaid.length > 0;
+      const detail = people.map(p => {
+        let s, col;
+        if (p.paid && p.method === 'credit') { s = '💳 儲值'; col = '#6c63ff'; }
+        else if (p.paid) { s = '💵 現金'; col = '#38a169'; }
+        else { s = '❌ 未繳'; col = '#e53e3e'; }
+        return `<div class="hist-row"><span>${escapeHtml(p.name)}</span><span style="color:${col};font-weight:700">${s}</span></div>`;
+      }).join('');
+      html += `
+      <div class="hist-card ${hasUnpaid ? 'has-unpaid' : ''}">
+        <div class="hist-head" onclick="toggleHist(${idx})">
+          <div style="flex:1;min-width:0">
+            <div class="hist-date">${fmtHistDate(h.savedAt)}</div>
+            <div class="hist-sum">✅ 已繳 ${cashN + creditN} 人 · ❌ 未繳 ${unpaid.length} 人 · 💰 現金 $${(cashN * (h.fee || 0)).toLocaleString()}</div>
+            ${hasUnpaid ? `<div class="hist-unpaid">⚠ 未繳：${unpaid.map(p => escapeHtml(p.name)).join('、')}</div>` : ''}
+          </div>
+          <button class="delete-btn" onclick="event.stopPropagation();deleteHist(${idx})">✕</button>
+        </div>
+        <div class="hist-detail" id="hist-${idx}" style="display:none">${detail}</div>
+      </div>`;
+    }
+    wrap.innerHTML = html;
   }
 
   function renderCreditReminder() {
@@ -967,13 +1082,20 @@
   }
 
   function resetWeek() {
-    if (!confirm('新的一週開始！清除所有人的繳費記錄（名單保留、儲值餘額不受影響）？')) return;
+    if (!data.people.length) { showToast('目前沒有名單可結算'); return; }
+    if (!confirm('結算今天並開新的一週？\n這次的繳費狀況會存進「歷史紀錄」，名單保留、繳費清空（儲值餘額不受影響）。')) return;
+    if (!Array.isArray(data.history)) data.history = [];
+    data.history.push({
+      savedAt: new Date().toISOString(),
+      fee: data.fee,
+      people: data.people.map(p => ({ name: p.name, paid: !!p.paid, method: p.paid ? (p.method || 'cash') : null }))
+    });
     data.people.forEach(p => { p.paid = false; p.method = null; });
     data.weekStart = getWeekStart();
     save();
     render();
     updateLabels();
-    showToast('✨ 已重置，開始新的一週！');
+    showToast('✨ 已存檔並重置，開始新的一週！');
   }
 
   function exportResult() {
