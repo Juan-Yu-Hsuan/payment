@@ -599,6 +599,17 @@
       border-bottom: 1px solid #f7fafc;
     }
     .hist-row:last-child { border-bottom: none; }
+    .hist-status {
+      border: none;
+      border-radius: 999px;
+      padding: 5px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .hist-status:active { transform: scale(0.95); }
+    .hist-edit-hint { font-size: 11px; color: #a0aec0; padding: 6px 2px 8px; }
   </style>
 </head>
 <body>
@@ -738,6 +749,7 @@
 
   let pending = null;     // { i, useCredit }
   let topupIndex = null;
+  const _histOpen = new Set();
 
   function fmtCredits(c) {
     c = Math.round((c || 0) * 10) / 10;
@@ -837,8 +849,19 @@
   }
 
   function toggleHist(idx) {
-    const el = document.getElementById('hist-' + idx);
-    if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+    if (_histOpen.has(idx)) _histOpen.delete(idx); else _histOpen.add(idx);
+    renderHistory();
+  }
+
+  function cycleHistStatus(idx, j) {
+    const rec = data.history[idx];
+    if (!rec || !rec.people[j]) return;
+    const p = rec.people[j];
+    if (!p.paid) { p.paid = true; p.method = 'cash'; }
+    else if (p.method !== 'credit') { p.method = 'credit'; }
+    else { p.paid = false; p.method = null; }
+    save();
+    renderHistory();
   }
 
   function deleteHist(idx) {
@@ -846,6 +869,7 @@
     if (!h) return;
     if (!confirm(`刪除 ${fmtHistDate(h.savedAt)} 的紀錄？`)) return;
     data.history.splice(idx, 1);
+    _histOpen.clear();
     save();
     renderHistory();
   }
@@ -865,12 +889,13 @@
       const creditN = people.filter(p => p.paid && p.method === 'credit').length;
       const unpaid = people.filter(p => !p.paid);
       const hasUnpaid = unpaid.length > 0;
-      const detail = people.map(p => {
-        let s, col;
-        if (p.paid && p.method === 'credit') { s = '💳 儲值'; col = '#6c63ff'; }
-        else if (p.paid) { s = '💵 現金'; col = '#38a169'; }
-        else { s = '❌ 未繳'; col = '#e53e3e'; }
-        return `<div class="hist-row"><span>${escapeHtml(p.name)}</span><span style="color:${col};font-weight:700">${s}</span></div>`;
+      const open = _histOpen.has(idx);
+      const detail = people.map((p, j) => {
+        let s, col, bg;
+        if (p.paid && p.method === 'credit') { s = '💳 儲值'; col = '#6c63ff'; bg = '#f8f7ff'; }
+        else if (p.paid) { s = '💵 現金'; col = '#38a169'; bg = '#f0fff4'; }
+        else { s = '❌ 未繳'; col = '#e53e3e'; bg = '#fff5f5'; }
+        return `<div class="hist-row"><span>${escapeHtml(p.name)}</span><button class="hist-status" style="color:${col};background:${bg}" onclick="cycleHistStatus(${idx},${j})">${s}</button></div>`;
       }).join('');
       html += `
       <div class="hist-card ${hasUnpaid ? 'has-unpaid' : ''}">
@@ -882,7 +907,10 @@
           </div>
           <button class="delete-btn" onclick="event.stopPropagation();deleteHist(${idx})">✕</button>
         </div>
-        <div class="hist-detail" id="hist-${idx}" style="display:none">${detail}</div>
+        <div class="hist-detail" id="hist-${idx}" style="display:${open ? 'block' : 'none'}">
+          <div class="hist-edit-hint">👆 點右邊狀態可修改（未繳 → 現金 → 儲值 → 未繳）</div>
+          ${detail}
+        </div>
       </div>`;
     }
     wrap.innerHTML = html;
@@ -978,7 +1006,6 @@
     showToast(`✅ 已新增「${name}」`);
   }
 
-  // 點「收款」按鈕：判斷是現金還是儲值扣款，跳對應彈窗
   function askTogglePaid(i) {
     const p = data.people[i];
     const modal = document.getElementById('modal');
