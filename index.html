@@ -524,6 +524,11 @@
       border-color: #e2e8f0;
       color: #a0aec0;
     }
+    .credit-chip.debt {
+      background: #fff5f5;
+      border-color: #fc8181;
+      color: #c53030;
+    }
 
     /* 會員紀錄 */
     .log-btn {
@@ -826,7 +831,9 @@
           : `<span class="paid-badge">$${data.fee} ✓</span>`;
       }
       const memberTag = (m && !p.paid)
-        ? ` <span style="font-size:11px;color:#6c63ff;font-weight:600">💳${fmtCredits(m.credits)}場</span>`
+        ? (m.credits < 0
+            ? ` <span style="font-size:11px;color:#e53e3e;font-weight:700">💳欠${fmtCredits(-m.credits)}場</span>`
+            : ` <span style="font-size:11px;color:#6c63ff;font-weight:600">💳${fmtCredits(m.credits)}場</span>`)
         : '';
       return `
       <div class="person ${p.paid ? 'paid' : ''}">
@@ -924,15 +931,20 @@
     const sorted = data.members.slice().sort((a, b) => (a.credits || 0) - (b.credits || 0));
     const chips = sorted.map(m => {
       const c = m.credits || 0;
+      if (c < 0) {
+        return `<span class="credit-chip debt">${escapeHtml(m.name)} 欠 <span class="n">${fmtCredits(-c)}</span>場</span>`;
+      }
       let cls = '', tag = '';
       if (c <= 0) { cls = 'empty'; tag = ' · 已用完'; }
       else if (c <= 1) { cls = 'low'; tag = ' · ⚠ 最後 1 場'; }
       return `<span class="credit-chip ${cls}">${escapeHtml(m.name)} <span class="n">${fmtCredits(c)}</span>場${tag}</span>`;
     }).join('');
 
+    const debtCount = data.members.filter(m => (m.credits || 0) < 0).length;
     const lowCount = data.members.filter(m => (m.credits || 0) > 0 && (m.credits || 0) <= 1).length;
-    const emptyCount = data.members.filter(m => (m.credits || 0) <= 0).length;
+    const emptyCount = data.members.filter(m => (m.credits || 0) === 0).length;
     let warn = '';
+    if (debtCount) warn += ` · <span style="color:#c53030">${debtCount} 人已預扣（欠場）</span>`;
     if (lowCount) warn += ` · <span style="color:#e53e3e">${lowCount} 人剩最後 1 場</span>`;
     if (emptyCount) warn += ` · <span style="color:#a0aec0">${emptyCount} 人已用完</span>`;
 
@@ -971,7 +983,7 @@
         <button class="delete-btn" onclick="deleteMember(${i})">✕</button>
         <div style="flex:1;min-width:0">
           <div class="person-name">${escapeHtml(m.name)}</div>
-          <div class="member-sub">剩 <b>${fmtCredits(m.credits)}</b> 場 · ≈ $${Math.round((m.credits || 0) * data.fee).toLocaleString()}</div>
+          <div class="member-sub">${(m.credits || 0) < 0 ? `<b style="color:#e53e3e">欠 ${fmtCredits(-(m.credits || 0))} 場</b> · 待補 $${Math.round(-(m.credits || 0) * data.fee).toLocaleString()}` : `剩 <b>${fmtCredits(m.credits)}</b> 場 · ≈ $${Math.round((m.credits || 0) * data.fee).toLocaleString()}`}</div>
         </div>
         <button class="log-btn" onclick="toggleMemberLog(${i})" title="儲值/扣場紀錄">📜</button>
         <button class="topup-btn" onclick="askTopup(${i})">＋ 儲值</button>
@@ -1006,6 +1018,7 @@
     showToast(`✅ 已新增「${name}」`);
   }
 
+  // 點「收款」按鈕：判斷是現金還是儲值扣款，跳對應彈窗
   function askTogglePaid(i) {
     const p = data.people[i];
     const modal = document.getElementById('modal');
@@ -1018,23 +1031,26 @@
 
     if (!p.paid) {
       const m = findMember(p.name);
-      if (m && m.credits >= 1) {
+      if (m) {
+        // 會員 → 一律用儲值扣款（沒場數就預扣，餘額可為負）
+        const after = Math.round((m.credits - 1) * 10) / 10;
         icon.textContent = '💳';
         title.textContent = '用儲值扣款';
         amount.textContent = p.name;
-        message.textContent = `「${p.name}」目前有 ${fmtCredits(m.credits)} 場，扣 1 場後剩 ${fmtCredits(m.credits - 1)} 場。確認扣款？`;
+        message.textContent = `「${p.name}」目前 ${fmtCredits(m.credits)} 場，扣 1 場後 ${fmtCredits(after)} 場` + (after < 0 ? '（預扣，待補繳儲值）' : '') + '。確認扣款？';
         confirmBtn.textContent = '扣 1 場';
         pending = { i, useCredit: true };
       } else {
+        // 非會員 → 收現金
         icon.textContent = '💵';
         title.textContent = '確認收款';
         amount.textContent = `$${data.fee}`;
-        const low = (m && m.credits < 1) ? '（儲值場數不足，改收現金）' : '';
-        message.textContent = `確認向「${p.name}」收取 $${data.fee} 元？${low}`;
+        message.textContent = `確認向「${p.name}」收取 $${data.fee} 元？`;
         confirmBtn.textContent = '確認收款';
         pending = { i, useCredit: false };
       }
     } else {
+      // 已繳 → 取消
       icon.textContent = '↩️';
       title.textContent = '取消繳費紀錄';
       amount.textContent = p.name;
@@ -1060,17 +1076,17 @@
     const p = data.people[i];
 
     if (!p.paid) {
+      // 繳費
       if (pending.useCredit) {
         const m = findMember(p.name);
-        if (!m || m.credits < 1) {
-          showToast('⚠️ 儲值場數不足');
-          closeModal(); render(); return;
-        }
+        if (!m) { showToast('⚠️ 找不到會員'); closeModal(); render(); return; }
         m.credits = Math.round((m.credits - 1) * 10) / 10;
         if (!Array.isArray(m.log)) m.log = [];
         m.log.push({ t: 'deduct', d: new Date().toISOString(), s: -1 });
         p.paid = true; p.method = 'credit';
-        if (m.credits <= 1) {
+        if (m.credits < 0) {
+          showToast(`⚠️ ${p.name} 已預扣，目前欠 ${fmtCredits(-m.credits)} 場，記得補繳！`);
+        } else if (m.credits <= 1) {
           showToast(`⚠️ ${p.name} 只剩 ${fmtCredits(m.credits)} 場，記得提醒儲值！`);
         } else {
           showToast(`💳 ${p.name} 扣 1 場（剩 ${fmtCredits(m.credits)} 場）`);
@@ -1080,6 +1096,7 @@
         showToast(`✅ ${p.name} 已繳 $${data.fee}`);
       }
     } else {
+      // 取消繳費
       if (p.method === 'credit') {
         const m = findMember(p.name);
         if (m) {
@@ -1224,6 +1241,7 @@
     setTimeout(() => t.classList.remove('show'), 2000);
   }
 
+  // 點背景關閉彈窗
   document.getElementById('modal').addEventListener('click', (e) => {
     if (e.target.id === 'modal') closeModal();
   });
